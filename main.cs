@@ -1,60 +1,148 @@
 using System;
-using HitClub.DatabaseManager;
-using Serilog;
-using Serilog.Events;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Diagnostics;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Net;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using xNet;
 
-namespace HitClub.Logging
+namespace HttpRequest_Bai1_GetDataFrom_HowKteam
 {
-    public class ServerLogger : IServerLogger
+    public partial class Form1 : Form
     {
-        private readonly ILogger _logger;
-
-        public ServerLogger()
+        public Form1()
         {
-            _logger = new LoggerConfiguration()
-                .WriteTo.Console(outputTemplate: "{Message:lj}{NewLine}{Exception}")
-                .WriteTo.File("logging/log-.txt", LogEventLevel.Error, rollingInterval: RollingInterval.Day)
-                .CreateLogger();
-        }
-        
-        public interface IServerLogger
-        {
-        void Debug(string message);
-        void Print(string message);
-        void Info(string info);
-        void Warning(string message, Exception exception);
-        void Error(string message, Exception exception);
-        void Error(string message);
+            InitializeComponent();
         }
 
-        public void Debug(string message)
+        private void button1_Click(object sender, EventArgs e)
         {
-            if(Manager.gI().IsDebug) _logger.Information($"DEBUG ==> {message}");
-        }
-        
-        public void Print(string message)
-        {
-            _logger.Information($"==> {message}");
+            //Crawl
+            /*
+             HttpClient
+             HttpWebClient
+             WebClient
+             HttpWebRequest
+             HttpRequest
+             */
+
+            var html = GetData("https://bodergatez.dsrcgoms.net/user/login.aspx");
+            TestData(html);
         }
 
-        public void Info(string info)
+        void TestData(string html)
         {
-            _logger.Information(info);
+            File.WriteAllText("res.html", html);
+            Process.Start("res.html");
+        }
+              
+
+        private void button2_Click(object sender, EventArgs e)
+        {
+            string cookie = "";
+            var html = GetData("https://bodergatez.dsrcgoms.net/user/login.aspx", null, null, cookie);
+            TestData(html);
         }
 
-        public void Warning(string message, Exception exception = null)
+        #region Kteam code
+        void AddCookie(HttpRequest http, string cookie)
         {
-            _logger.Warning(message, exception);
+            var temp = cookie.Split(';');
+            foreach (var item in temp)
+            {
+                var temp2 = item.Split('=');
+                if (temp2.Count() > 1)
+                {
+                    http.Cookies.Add(temp2[0], temp2[1]);
+                }
+            }
         }
 
-        public void Error(string message, Exception exception)
+        string GetData(string url, HttpRequest http = null, string userArgent = "", string cookie = null)
         {
-            _logger.Error(message, exception);
+            if (http == null)
+            {
+                http = new HttpRequest();
+                http.Cookies = new CookieDictionary();
+            }
+
+            if (!string.IsNullOrEmpty(cookie))
+            {
+                AddCookie(http, cookie);
+            }
+
+            if (!string.IsNullOrEmpty(userArgent))
+            {
+                http.UserAgent = userArgent;
+            }
+            string html = http.Get(url).ToString();
+            return html;
         }
 
-        public void Error(string message)
+        string GetLoginDataToken(string html)
         {
-            _logger.Error(message);
+            string token = "";
+
+            var res =  Regex.Matches(html, @"(?<=__RequestVerificationToken"" type=""hidden"" value="").*?(?="")", RegexOptions.Singleline);
+
+            if (res !=null && res.Count > 0)
+            {
+                token = res[1].ToString();
+            }
+
+            return token;
+        }
+
+        string PostData(HttpRequest http, string url, string data = null, string contentType = null, string userArgent = "", string cookie = null)
+        {
+            if (http == null)
+            {
+                http = new HttpRequest();
+                http.Cookies = new CookieDictionary();
+            }
+
+            if (!string.IsNullOrEmpty(cookie))
+            {
+                AddCookie(http, cookie);
+            }
+
+            if (!string.IsNullOrEmpty(userArgent))
+            {
+                http.UserAgent = userArgent;
+            }
+
+            string html = http.Post(url, data, contentType).ToString();
+            return html;
+        }
+        #endregion
+
+        private void button3_Click(object sender, EventArgs e)
+        {
+            HttpRequest http = new HttpRequest();
+            http.Cookies = new CookieDictionary();
+            string userArgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/69.0.3497.100 Safari/537.36";
+
+            var html = GetData("https://bodergatez.dsrcgoms.net/user/login.aspx", http, userArgent);
+
+
+            string token = GetLoginDataToken(html);
+
+            string userName = "";
+            string password = "";
+            string data = "__RequestVerificationToken="+token+"&Email="+ WebUtility.UrlEncode(userName) + "&Password="+ WebUtility.UrlEncode(password) + "&RememberMe=true&RememberMe=false";
+            html = PostData(http, "https://bodergatez.dsrcgoms.net/user/login.aspx", data, "application/x-www-form-urlencoded; charset=UTF-8").ToString();
+
+            html = GetData("https://bodergatez.dsrcgoms.net/user/login.aspx", http, userArgent);
+
+            File.WriteAllText(html["r_token"], html);
+            Process.Start(html["r_token"]);
         }
     }
 }
